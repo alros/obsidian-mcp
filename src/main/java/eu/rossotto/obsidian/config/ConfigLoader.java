@@ -35,30 +35,60 @@ public final class ConfigLoader {
     private ConfigLoader() {
     }
 
-    public static List<Path> candidates() {
-        List<Path> result = new ArrayList<>();
-        explicitLocation().ifPresent(result::add);
-        result.add(Path.of(".config", "config.yaml").toAbsolutePath().normalize());
-        result.add(Path.of(System.getProperty("user.home"), ".config", "obsidian-mcp", "config.yaml"));
+    /**
+     * A possible configuration location.
+     *
+     * @param path   absolute, normalized path
+     * @param source human-readable origin, e.g. "OBSIDIAN_MCP_CONFIG environment variable"
+     */
+    public record Candidate(Path path, String source) {
+    }
+
+    public static List<Candidate> candidates() {
+        Optional<Candidate> explicit = explicitLocation();
+        if (explicit.isPresent()) {
+            // An explicit location must exist: silently falling back would be surprising.
+            return List.of(explicit.get());
+        }
+        List<Candidate> result = new ArrayList<>();
+        result.add(new Candidate(absolute(Path.of(".config", "config.yaml")), "working directory"));
+        result.add(new Candidate(absolute(Path.of(System.getProperty("user.home"), ".config", "obsidian-mcp",
+                "config.yaml")), "user home"));
         return result;
     }
 
-    private static Optional<Path> explicitLocation() {
+    private static Optional<Candidate> explicitLocation() {
         String value = System.getProperty(SYS_PROP);
-        if (value == null || value.isBlank()) {
-            value = System.getenv(ENV_VAR);
+        if (value != null && !value.isBlank()) {
+            return Optional.of(new Candidate(absolute(Path.of(value)), SYS_PROP + " system property"));
         }
-        return value == null || value.isBlank() ? Optional.empty() : Optional.of(Path.of(value).toAbsolutePath());
+        value = System.getenv(ENV_VAR);
+        if (value != null && !value.isBlank()) {
+            return Optional.of(new Candidate(absolute(Path.of(value)), ENV_VAR + " environment variable"));
+        }
+        return Optional.empty();
+    }
+
+    private static Path absolute(Path p) {
+        String s = p.toString();
+        if (s.equals("~") || s.startsWith("~/")) {
+            p = Path.of(System.getProperty("user.home") + s.substring(1));
+        }
+        return p.toAbsolutePath().normalize();
     }
 
     /** Finds the first existing configuration file. */
-    public static Optional<Path> locate() {
-        Optional<Path> explicit = explicitLocation();
-        if (explicit.isPresent()) {
-            // An explicit location must exist: silently falling back would be surprising.
-            return explicit.filter(Files::isRegularFile);
+    public static Optional<Candidate> locate() {
+        return candidates().stream().filter(c -> Files.isRegularFile(c.path())).findFirst();
+    }
+
+    /** Where a located file really lives, following symlinks; falls back to the path itself. */
+    public static Path realPath(Path p) {
+        try {
+            return p.toRealPath();
+        } catch (IOException e) {
+            return p;
         }
-        return candidates().stream().filter(Files::isRegularFile).findFirst();
     }
 
     public static ServerConfig load(Path file) throws ConfigException {

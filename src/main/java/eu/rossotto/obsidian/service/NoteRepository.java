@@ -41,18 +41,26 @@ public class NoteRepository {
 
     @PostConstruct
     void init() {
-        Optional<Path> file = ConfigLoader.locate();
-        if (file.isEmpty()) {
+        Optional<ConfigLoader.Candidate> found = ConfigLoader.locate();
+        if (found.isEmpty()) {
             configError = "No configuration file found. Looked in: " + ConfigLoader.candidates().stream()
-                    .map(Path::toString).collect(Collectors.joining(", "));
+                    .map(c -> c.path() + " (" + c.source() + ")").collect(Collectors.joining(", "));
             LOG.error(configError);
             return;
         }
+        Path file = found.get().path();
+        Path real = ConfigLoader.realPath(file);
+        LOG.infof("Using configuration file %s (from %s)%s", file, found.get().source(),
+                real.equals(file) ? "" : ", symlink to " + real);
         try {
-            configure(ConfigLoader.load(file.get()));
-            LOG.infof("Loaded %s", file.get());
+            ServerConfig config = ConfigLoader.load(file);
+            configure(config);
+            for (VaultConfig v : config.vaults()) {
+                LOG.infof("Vault '%s' at %s (allowed-tags=%s, ignored-tags=%s, show-untagged=%s)",
+                        v.name(), v.root(), v.allowedTags(), v.ignoredTags(), v.showUntagged());
+            }
         } catch (ConfigLoader.ConfigException e) {
-            configError = e.getMessage();
+            configError = e.getMessage() + " (configuration file: " + file + ")";
             LOG.error(configError);
             return;
         }

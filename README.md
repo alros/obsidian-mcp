@@ -60,6 +60,14 @@ Visibility rules:
 The index refreshes incrementally, at most once per second, and only when a tool is called. Edits you make in
 Obsidian show up straight away without restarting the server, and nothing runs in the background while it's idle.
 
+At startup the server logs the absolute path of the config file it uses and how it found it, plus each vault
+with its rules, to stderr:
+
+```
+INFO  Using configuration file /Users/you/.config/obsidian-mcp/config.yaml (from user home)
+INFO  Vault 'work' at /Users/you/Obsidian/Work (allowed-tags=[project], ignored-tags=[private], show-untagged=false)
+```
+
 Config errors (a missing vault folder, a misspelled key, a duplicate name) are logged to stderr and returned as
 the error of every tool call, so they show up in your client.
 

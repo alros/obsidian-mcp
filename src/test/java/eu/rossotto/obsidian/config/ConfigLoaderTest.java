@@ -46,6 +46,31 @@ class ConfigLoaderTest {
     }
 
     @Test
+    void explicitLocationIsAbsoluteAndExclusive() throws Exception {
+        Path f = write("vaults: []");
+        System.setProperty(ConfigLoader.SYS_PROP, tmp.resolve("sub/../config.yaml").toString());
+        try {
+            ConfigLoader.Candidate c = ConfigLoader.locate().orElseThrow();
+            assertEquals(f.toAbsolutePath().normalize(), c.path());
+            assertEquals("obsidian.mcp.config system property", c.source());
+
+            System.setProperty(ConfigLoader.SYS_PROP, tmp.resolve("missing.yaml").toString());
+            assertTrue(ConfigLoader.locate().isEmpty(), "no silent fallback when the explicit file is missing");
+            assertEquals(1, ConfigLoader.candidates().size());
+        } finally {
+            System.clearProperty(ConfigLoader.SYS_PROP);
+        }
+    }
+
+    @Test
+    void defaultCandidatesAreAbsolute() {
+        List<ConfigLoader.Candidate> c = ConfigLoader.candidates();
+        assertEquals(Path.of(".config/config.yaml").toAbsolutePath().normalize(), c.get(0).path());
+        assertEquals(Path.of(System.getProperty("user.home"), ".config/obsidian-mcp/config.yaml"), c.get(1).path());
+        assertTrue(c.stream().allMatch(x -> x.path().isAbsolute()));
+    }
+
+    @Test
     void expandsHome() {
         VaultConfig v = new VaultConfig("x", "~/notes", null, null, null);
         assertEquals(Path.of(System.getProperty("user.home"), "notes"), v.root());
