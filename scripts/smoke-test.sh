@@ -36,7 +36,6 @@ JSON
   sleep "${SMOKE_WAIT:-2}"
 }
 
-START=$(date +%s%N 2>/dev/null || python3 -c 'import time;print(time.time_ns())')
 requests | OBSIDIAN_MCP_CONFIG="$WORK/config.yaml" "${CMD[@]}" > "$WORK/out.jsonl" 2> "$WORK/err.log" || true
 
 fail() { echo "FAIL: $*"; echo "--- stdout"; cat "$WORK/out.jsonl"; echo "--- stderr"; cat "$WORK/err.log"; exit 1; }

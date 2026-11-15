@@ -1,0 +1,83 @@
+name: Release
+
+# Push a tag like v1.2.0 to build the native binaries and publish a GitHub release:
+#   git tag v1.2.0 && git push origin v1.2.0
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: Native (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15        # Apple Silicon
+            arch: arm64
+          - os: macos-15-intel  # Intel
+            arch: x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '25'
+          distribution: graalvm
+          cache: maven
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          mvn -B -ntp versions:set -DnewVersion="$VERSION" -DgenerateBackupPoms=false
+
+      # -march=compatibility instead of the local -march=native, so the binary runs on every Mac of that architecture
+      - name: Build native binary
+        run: mvn -B -ntp verify -Dnative -Dquarkus.native.additional-build-args=-march=compatibility
+
+      - name: Smoke test
+        run: scripts/smoke-test.sh "target/obsidian-mcp-$VERSION-runner"
+
+      - name: Package
+        run: |
+          NAME="obsidian-mcp-macos-${{ matrix.arch }}"
+          mkdir -p "dist/$NAME"
+          cp "target/obsidian-mcp-$VERSION-runner" "dist/$NAME/obsidian-mcp"
+          cp README.md LICENSE config.example.yaml "dist/$NAME/"
+          tar -C dist -czf "dist/$NAME.tar.gz" "$NAME"
+          (cd dist && shasum -a 256 "$NAME.tar.gz" > "$NAME.tar.gz.sha256")
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+          if-no-files-found: error
+
+  release:
+    needs: native
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            --verify-tag
