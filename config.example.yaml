@@ -1,0 +1,28 @@
+# obsidian-mcp configuration
+#
+# Looked up in this order (first existing file wins):
+#   1. $OBSIDIAN_MCP_CONFIG (or -Dobsidian.mcp.config=...)
+#   2. ./.config/config.yaml           (relative to the working directory)
+#   3. ~/.config/obsidian-mcp/config.yaml
+#
+# Visibility rules, per vault (only frontmatter tags count; #tags in the body are ignored):
+#   - a note with an ignored tag is hidden, even if it also has an allowed tag
+#   - allowed-tags empty or missing  -> every other tagged note is visible
+#   - allowed-tags non-empty         -> a note needs at least one allowed tag
+#   - notes without tags             -> visible only if show-untagged is true (default: false)
+#   - rules are case-insensitive and nested: "project" also matches "project/alpha"
+# Hidden notes are invisible to every tool: they're not listed, searched or readable, and links to them
+# turn into plain text.
+
+vaults:
+  - name: work                       # first segment of note ids, e.g. work/Projects/Plan.md
+    path: ~/Obsidian/Work
+    allowed-tags: [project, howto]
+    ignored-tags: [private, draft]
+    show-untagged: false
+
+  - name: personal
+    path: ~/Obsidian/Personal
+    allowed-tags: []                 # everything...
+    ignored-tags: [journal, health]  # ...except these
+    show-untagged: true
