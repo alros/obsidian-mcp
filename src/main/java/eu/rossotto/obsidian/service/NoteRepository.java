@@ -5,6 +5,7 @@ import eu.rossotto.obsidian.config.ServerConfig;
 import eu.rossotto.obsidian.config.VaultConfig;
 import eu.rossotto.obsidian.vault.IndexedContent;
 import eu.rossotto.obsidian.vault.Note;
+import eu.rossotto.obsidian.vault.NoteWriter;
 import eu.rossotto.obsidian.vault.TagRules;
 import eu.rossotto.obsidian.vault.Vault;
 import io.quarkus.runtime.Startup;
@@ -14,6 +15,7 @@ import org.jboss.logging.Logger;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -36,6 +38,8 @@ public class NoteRepository {
     static final long REFRESH_INTERVAL_MS = 1_000;
 
     private final Map<String, Vault> vaults = new LinkedHashMap<>();
+    /** Visible for tests. */
+    Clock clock = Clock.systemDefaultZone();
     private volatile String configError;
     private volatile long lastRefresh;
 
@@ -56,8 +60,12 @@ public class NoteRepository {
             ServerConfig config = ConfigLoader.load(file);
             configure(config);
             for (VaultConfig v : config.vaults()) {
-                LOG.infof("Vault '%s' at %s (allowed-tags=%s, ignored-tags=%s, show-untagged=%s)",
-                        v.name(), v.root(), v.allowedTags(), v.ignoredTags(), v.showUntagged());
+                LOG.infof("Vault '%s' at %s (allowed-tags=%s, ignored-tags=%s, show-untagged=%s)%s",
+                        v.name(), v.root(), v.allowedTags(), v.ignoredTags(), v.showUntagged(),
+                        v.allowCreate()
+                                ? ", new notes go to " + v.inboxRoot()
+                                        + (v.autoTag() == null ? "" : " with tag '" + v.autoTag() + "'")
+                                : ", read-only");
             }
         } catch (ConfigLoader.ConfigException e) {
             configError = e.getMessage() + " (configuration file: " + file + ")";
@@ -191,6 +199,44 @@ public class NoteRepository {
                     .forEachOrdered(candidates::add);
         }
         return SearchEngine.search(query, candidates, limit);
+    }
+
+    // ---------------------------------------------------------------------------------------------- writes
+
+    /**
+     * @param created what was written
+     * @param id      note id, usable with {@link #get(String)} if {@code visible}
+     * @param visible whether the vault's tag rules let the tools see the new note
+     */
+    public record CreatedNote(NoteWriter.Created created, String id, boolean visible) {
+    }
+
+    /** Creates a new note in the vault's inbox folder. Never modifies an existing file. */
+    public CreatedNote create(String vaultName, String title, String body, List<String> tags) {
+        ensureReady();
+        if (vaultName == null || vaultName.isBlank()) {
+            throw new RepositoryException("vault is required. Available: " + String.join(", ", vaults.keySet()));
+        }
+        Vault vault = selectVaults(vaultName).getFirst();
+        if (!vault.config().allowCreate()) {
+            throw new RepositoryException("Creating notes is disabled for vault '" + vault.name()
+                    + "' (set allow-create: true in its configuration)");
+        }
+        NoteWriter.Created created;
+        try {
+            created = NoteWriter.create(vault.config(), title, body, tags, clock);
+        } catch (IllegalArgumentException e) {
+            throw new RepositoryException(e.getMessage());
+        } catch (IOException e) {
+            LOG.errorf("Cannot create note '%s' in vault '%s': %s", title, vault.name(), e.getMessage());
+            throw new RepositoryException("Cannot create the note: " + e.getMessage());
+        }
+        String id = vault.name() + "/" + created.relPath();
+        LOG.infof("Created note %s", id);
+        // Index it straight away, so the next list or search call already sees it.
+        vault.refresh();
+        boolean visible = vault.snapshot().visibleByPath(created.relPath()).isPresent();
+        return new CreatedNote(created, id, visible);
     }
 
     private List<Vault> selectVaults(String name) {

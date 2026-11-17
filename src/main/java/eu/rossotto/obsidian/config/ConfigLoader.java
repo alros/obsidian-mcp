@@ -120,6 +120,29 @@ public final class ConfigLoader {
             if (!Files.isDirectory(v.root())) {
                 throw new ConfigException("Vault '" + v.name() + "': directory not found: " + v.root());
             }
+            validateInbox(v);
+            if (v.autoTag() != null) {
+                try {
+                    VaultConfig.validateTag(v.autoTag());
+                } catch (IllegalArgumentException e) {
+                    throw new ConfigException("Vault '" + v.name() + "': auto-tag: " + e.getMessage());
+                }
+            }
+        }
+    }
+
+    private static void validateInbox(VaultConfig v) throws ConfigException {
+        String folder = v.inboxFolder();
+        if (folder.startsWith("/") || folder.startsWith("~") || folder.matches("^[A-Za-z]:.*")) {
+            throw new ConfigException("Vault '" + v.name() + "': inbox-folder must be relative to the vault, got '"
+                    + folder + "'");
+        }
+        for (String segment : folder.split("/")) {
+            // Covers "." and "..", and hidden folders, which the index never scans.
+            if (segment.startsWith(".")) {
+                throw new ConfigException("Vault '" + v.name() + "': inbox-folder must stay inside the vault and "
+                        + "must not be a hidden folder, got '" + folder + "'");
+            }
         }
     }
 

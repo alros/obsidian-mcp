@@ -43,6 +43,10 @@ public final class Vault {
         return config.name();
     }
 
+    public VaultConfig config() {
+        return config;
+    }
+
     public Snapshot snapshot() {
         return snapshot;
     }

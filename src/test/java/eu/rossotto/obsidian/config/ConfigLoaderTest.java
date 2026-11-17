@@ -43,6 +43,37 @@ class ConfigLoaderTest {
         VaultConfig personal = c.vaults().get(1);
         assertTrue(personal.allowedTags().isEmpty());
         assertFalse(personal.showUntagged(), "untagged notes are hidden by default");
+        assertFalse(work.allowCreate(), "vaults are read-only by default");
+        assertEquals("AI-input", work.inboxFolder());
+        assertEquals(null, work.autoTag());
+    }
+
+    @Test
+    void parsesCreationSettings() throws Exception {
+        ServerConfig c = ConfigLoader.load(write("""
+                vaults:
+                  - name: work
+                    path: %s
+                    allow-create: true
+                    inbox-folder: "Inbox/From AI/"
+                    auto-tag: "#AI/Generated"
+                """.formatted(Fixtures.VAULTS.resolve("work"))));
+        VaultConfig work = c.vaults().getFirst();
+        assertTrue(work.allowCreate());
+        assertEquals("Inbox/From AI", work.inboxFolder());
+        assertEquals(Fixtures.VAULTS.resolve("work/Inbox/From AI").normalize(), work.inboxRoot());
+        assertEquals("AI/Generated", work.autoTag(), "case kept, '#' dropped");
+    }
+
+    @Test
+    void rejectsInvalidCreationSettings() throws Exception {
+        String dir = Fixtures.VAULTS.resolve("work").toString();
+        for (String bad : List.of("inbox-folder: /tmp/x", "inbox-folder: ../outside", "inbox-folder: a/../../b",
+                "inbox-folder: .hidden", "inbox-folder: '~/x'", "auto-tag: two words", "auto-tag: '2026'",
+                "allow_create: true")) {
+            assertThrows(ConfigLoader.ConfigException.class, () -> ConfigLoader.load(write(
+                    "vaults:\n  - name: a\n    path: " + dir + "\n    " + bad + "\n")), bad);
+        }
     }
 
     @Test

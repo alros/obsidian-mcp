@@ -13,6 +13,12 @@
 #   - rules are case-insensitive and nested: "project" also matches "project/alpha"
 # Hidden notes are invisible to every tool: they're not listed, searched or readable, and links to them
 # turn into plain text.
+#
+# Creating notes (create_note), per vault:
+#   - allow-create   false by default: the vault is read-only
+#   - inbox-folder   where new notes go, relative to the vault (default: AI-input)
+#   - auto-tag       optional tag added to every created note
+# Existing notes are never modified: a clashing title gets "-1", "-2", ... appended.
 
 vaults:
   - name: work                       # first segment of note ids, e.g. work/Projects/Plan.md
@@ -20,6 +26,9 @@ vaults:
     allowed-tags: [project, howto]
     ignored-tags: [private, draft]
     show-untagged: false
+    allow-create: false              # these are the test fixtures: keep them clean
+    inbox-folder: AI-input
+    auto-tag: project/ai-input       # matches allowed-tags, so created notes stay visible
 
   - name: personal
     path: src/test/resources/vaults/personal

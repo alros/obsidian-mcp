@@ -1,7 +1,8 @@
 # obsidian-mcp
 
 A small, fast [MCP](https://modelcontextprotocol.io) server that gives Claude, GitHub Copilot and any other MCP
-client **read-only** access to your Obsidian vaults, with per-vault tag rules that decide what's visible.
+client access to your Obsidian vaults, with per-vault tag rules that decide what's visible. Access is
+**read-only**, except that vaults you opt in can receive **new** notes. Existing notes are never modified.
 
 It's built with Java 25 and Quarkus, compiled to a native binary, and speaks MCP over stdio.
 
@@ -13,6 +14,7 @@ It's built with Java 25 and Quarkus, compiled to a native binary, and speaks MCP
 | `list_notes(vault?, tag?, offset?, limit?)` | `id`, `title` and `tags` of the visible notes. A tag filter also matches nested tags |
 | `get_note(id)` | Note content as markdown, plus `links` (external URLs) and `linkedNotes` (visible notes it links to) |
 | `search_notes(query, vault?, limit?)` | Case-insensitive full-text search. All terms must match, and `"quoted phrases"` work. Returns ranked results with snippets |
+| `create_note(vault, title, body, tags?)` | Creates a new note in the vault's inbox folder. Only for vaults with `allow-create: true`. See [Creating notes](#creating-notes) |
 
 A note `id` is `<vault>/<path inside the vault>`, for example `work/Projects/Alpha.md`.
 
@@ -41,6 +43,9 @@ vaults:
     allowed-tags: [project, howto]   # empty = everything
     ignored-tags: [private]          # always wins over allowed-tags
     show-untagged: false             # default
+    allow-create: true               # default false: create_note is refused
+    inbox-folder: AI-input           # default; relative to the vault
+    auto-tag: project/ai-input       # optional; added to every created note
 ```
 
 The server looks for its config in this order and uses the first file it finds:
@@ -57,6 +62,37 @@ Visibility rules:
 - **Matching** is case-insensitive and hierarchical: `project` matches `project/alpha` but not `projects`.
 - **Skipped folders:** `.obsidian`, `.trash`, `.git` and other hidden folders are never scanned.
 
+### Creating notes
+
+`create_note` only ever **adds** files. It can't edit, rename, move or delete anything, and it refuses vaults
+without `allow-create: true`.
+
+- New notes go into `inbox-folder` (default `AI-input`), which is created if missing. It must be a relative,
+  non-hidden folder inside the vault.
+- The title becomes the file name. Characters that aren't allowed in file names (`\ / : * ? " < > | # ^ [ ]`)
+  become `-`, leading dots and a trailing `.md` are dropped, and very long titles are cut to 200 bytes.
+- If the title is already taken in the inbox folder, ignoring case, `-1`, `-2`, … is appended: `some title`,
+  `some title-1`, `some title-2`. Files are created atomically, so even concurrent calls never overwrite a note.
+- The body is written exactly as given, after a frontmatter block with `created` (local time) and `tags`. The
+  `auto-tag`, if set, comes first, and duplicate tags (ignoring case) are dropped. Tags may contain only letters,
+  digits, `_`, `-` and `/`.
+
+```markdown
+---
+created: 2026-11-17T10:42:00
+tags:
+  - project/ai-input
+  - idea
+---
+The body, as written by the model.
+```
+
+The response includes the final `title`, the note `id` and `visible`. Tag rules apply to created notes too, so a
+note can be created and still be hidden from the other tools. In that case `visible` is `false`. To keep
+created notes visible, pick an `auto-tag` that your `allowed-tags` match, as in the example above.
+
+### Refresh and logging
+
 The index refreshes incrementally, at most once per second, and only when a tool is called. Edits you make in
 Obsidian show up straight away without restarting the server, and nothing runs in the background while it's idle.
 
@@ -65,7 +101,8 @@ with its rules, to stderr:
 
 ```
 INFO  Using configuration file /Users/you/.config/obsidian-mcp/config.yaml (from user home)
-INFO  Vault 'work' at /Users/you/Obsidian/Work (allowed-tags=[project], ignored-tags=[private], show-untagged=false)
+INFO  Vault 'work' at /Users/you/Obsidian/Work (allowed-tags=[project], ignored-tags=[private], show-untagged=false), new notes go to /Users/you/Obsidian/Work/AI-input with tag 'project/ai-input'
+INFO  Vault 'personal' at /Users/you/Obsidian/Personal (allowed-tags=[], ignored-tags=[journal], show-untagged=true), read-only
 ```
 
 Config errors (a missing vault folder, a misspelled key, a duplicate name) are logged to stderr and returned as
@@ -119,7 +156,7 @@ mix with the protocol.
 Use your real config (`~/.config/obsidian-mcp/config.yaml`), or the bundled test vaults:
 
 ```bash
-mkdir -p .config && sed "s|~/Obsidian/Work|$PWD/src/test/resources/vaults/work|; s|~/Obsidian/Personal|$PWD/src/test/resources/vaults/personal|" config.example.yaml > .config/config.yaml
+mkdir -p .config && sed "s|~/Obsidian/Work|$PWD/src/test/resources/vaults/work|; s|~/Obsidian/Personal|$PWD/src/test/resources/vaults/personal|; s|allow-create: true|allow-create: false|" config.example.yaml > .config/config.yaml
 ```
 
 That command writes `./.config/config.yaml`, which is picked up when you start the server from the project

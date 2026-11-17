@@ -14,7 +14,10 @@ import jakarta.inject.Inject;
 import java.util.List;
 import java.util.function.Supplier;
 
-/** MCP tools exposed to Claude, Copilot and any other MCP client. All of them are read-only. */
+/**
+ * MCP tools exposed to Claude, Copilot and any other MCP client. All of them are read-only except
+ * {@code create_note}, which only ever adds new files and only to vaults with {@code allow-create: true}.
+ */
 public class ObsidianTools {
 
     private static final int DEFAULT_LIST_LIMIT = 500;
@@ -53,6 +56,11 @@ public class ObsidianTools {
 
     @RegisterForReflection
     public record SearchResults(String query, int returned, List<SearchResult> results) {
+    }
+
+    @RegisterForReflection
+    public record CreatedNote(String id, String vault, String path, String title, List<String> tags,
+                              String created, boolean visible) {
     }
 
     // -------------------------------------------------------------------------------------------- tools
@@ -130,6 +138,27 @@ public class ObsidianTools {
             return new SearchResults(query, hits.size(), hits.stream()
                     .map(h -> new SearchResult(h.note().id(), h.note().title(), h.note().tags(), h.score(), h.snippets()))
                     .toList());
+        });
+    }
+
+    @Tool(name = "create_note",
+            description = "Creates a new markdown note in the vault's inbox folder. It can't edit or replace existing "
+                    + "notes: if a note with the same title already exists there, '-1', '-2', ... is appended to the "
+                    + "title. Characters not allowed in file names (\\ / : * ? \" < > | # ^ [ ]) become '-'. "
+                    + "Only vaults configured with allow-create accept new notes. The response gives the final title "
+                    + "and id; 'visible' is false when the vault's tag rules hide the note from the other tools.",
+            annotations = @Tool.Annotations(title = "Create note", readOnlyHint = false, idempotentHint = false,
+                    openWorldHint = false, destructiveHint = false))
+    public CreatedNote createNote(
+            @ToolArg(description = "Vault to create the note in (see list_vaults).") String vault,
+            @ToolArg(description = "Note title, used as the file name.") String title,
+            @ToolArg(description = "Note content in markdown, without frontmatter. Written as is.") String body,
+            @ToolArg(description = "Tags for the note, without '#', e.g. ['project/alpha', 'idea']. Letters, digits, "
+                    + "'_', '-' and '/' only.", required = false) List<String> tags) {
+        return call(() -> {
+            NoteRepository.CreatedNote c = repository.create(vault, title, body, tags);
+            return new CreatedNote(c.id(), vault.strip(), c.created().relPath(), c.created().title(),
+                    c.created().tags(), c.created().createdText(), c.visible());
         });
     }
 
