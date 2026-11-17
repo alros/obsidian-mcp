@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-if [[ $# -gt 0 ]]; then CMD=("$@"); else CMD=(target/obsidian-mcp-1.0.0-SNAPSHOT-runner); fi
+if [[ $# -gt 0 ]]; then CMD=("$@"); else CMD=(target/obsidian-mcp-1.1.0-SNAPSHOT-runner); fi
 
 WORK=$(mktemp -d)
 trap '[[ -n "${KEEP:-}" ]] || rm -rf "$WORK"' EXIT
