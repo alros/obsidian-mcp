@@ -27,7 +27,7 @@ binary on GitHub's Apple Silicon and Intel macOS runners, runs the tests and the
 binary, and publishes a GitHub release with the archives and auto-generated release notes:
 
 ```bash
-git tag v1.1.0 && git push origin v1.1.0
+git tag v1.2.0 && git push origin v1.2.0
 ```
 
 The version comes from the tag. You don't need to edit `pom.xml`, and the server reports that version to MCP

@@ -120,10 +120,10 @@ export JAVA_HOME=/Library/Java/JavaVirtualMachines/graalvm-25.jdk/Contents/Home
 mvn verify -Dnative
 ```
 
-The binary is written to `target/obsidian-mcp-1.1.0-SNAPSHOT-runner`. Install it somewhere stable:
+The binary is written to `target/obsidian-mcp-1.2.0-SNAPSHOT-runner`. Install it somewhere stable:
 
 ```bash
-cp target/obsidian-mcp-1.1.0-SNAPSHOT-runner ~/.local/bin/obsidian-mcp
+cp target/obsidian-mcp-1.2.0-SNAPSHOT-runner ~/.local/bin/obsidian-mcp
 ```
 
 To run the end-to-end stdio check against the bundled fixture vaults:
@@ -167,7 +167,7 @@ folder. To use any other file, set `OBSIDIAN_MCP_CONFIG=/path/to/config.yaml`.
 Native binary (after `mvn verify -Dnative`):
 
 ```bash
-target/obsidian-mcp-1.1.0-SNAPSHOT-runner
+target/obsidian-mcp-1.2.0-SNAPSHOT-runner
 ```
 
 Or the JVM build (after `mvn package`):
@@ -196,7 +196,7 @@ one-line JSON response:
 For a one-shot call with readable output, pipe the requests in and format the result with `jq`:
 
 ```bash
-printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"cli","version":"1"}}}' '{"jsonrpc":"2.0","method":"notifications/initialized"}' '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_notes","arguments":{}}}' | target/obsidian-mcp-1.1.0-SNAPSHOT-runner 2>/dev/null | jq -r 'select(.id==2) | .result.content[0].text | fromjson'
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"cli","version":"1"}}}' '{"jsonrpc":"2.0","method":"notifications/initialized"}' '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list_notes","arguments":{}}}' | target/obsidian-mcp-1.2.0-SNAPSHOT-runner 2>/dev/null | jq -r 'select(.id==2) | .result.content[0].text | fromjson'
 ```
 
 ### Or use the MCP Inspector
@@ -214,19 +214,19 @@ nvm install 24 && nvm use 24
 Then start it. Use `@latest`, so npx doesn't reuse a broken copy cached by an older Node:
 
 ```bash
-npx @modelcontextprotocol/inspector@latest target/obsidian-mcp-1.1.0-SNAPSHOT-runner
+npx @modelcontextprotocol/inspector@latest target/obsidian-mcp-1.2.0-SNAPSHOT-runner
 ```
 
 To use a config other than `./.config/config.yaml` or `~/.config/obsidian-mcp/config.yaml`, pass it with `-e`:
 
 ```bash
-npx @modelcontextprotocol/inspector@latest -e OBSIDIAN_MCP_CONFIG=$PWD/.config/myconfig.yaml target/obsidian-mcp-1.1.0-SNAPSHOT-runner
+npx @modelcontextprotocol/inspector@latest -e OBSIDIAN_MCP_CONFIG=$PWD/.config/myconfig.yaml target/obsidian-mcp-1.2.0-SNAPSHOT-runner
 ```
 
 To call a single tool without opening the web UI, use `--cli`:
 
 ```bash
-npx @modelcontextprotocol/inspector@latest --cli target/obsidian-mcp-1.1.0-SNAPSHOT-runner --method tools/call --tool-name search_notes --tool-arg query=quarkus
+npx @modelcontextprotocol/inspector@latest --cli target/obsidian-mcp-1.2.0-SNAPSHOT-runner --method tools/call --tool-name search_notes --tool-arg query=quarkus
 ```
 
 > **About `mvn quarkus:dev`:** dev mode uses the terminal for its own interactive console, which clashes with the
